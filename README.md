@@ -332,7 +332,7 @@ api_id: 12345678
 api_hash: "abcdef1234567890abcdef1234567890"
 session_name: akari
 owner_id: 123456789
-owner_phone: "+79261234567"
+owner_phone: "+79871234567"
 lang: ru
 prefix: "."
 modules_dir: userland
