@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"akari/core"
 
 	"github.com/mtgo-labs/mtgo/telegram"
+	"github.com/mtgo-labs/mtgo/tg"
 )
 
 func init() {
@@ -62,18 +64,17 @@ func cmdUpdate(ctx *telegram.Context) error {
 
 	if !isGitRepo(repoDir) {
 		_, err := ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID,
-			fmt.Sprintf("🌸 Akari · update\n━━━━━━━━━━━━━━━━━━━━\n\n❌ %s — не git-репозиторий.\n\nПроверь config.yaml → repo_dir", repoDir))
+			fmt.Sprintf("❌ %s — не git-репозиторий.\n\nПроверь config.yaml → repo_dir", repoDir))
 		return err
 	}
 
-	_, _ = ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID,
-		"🌸 Akari · проверка обновлений...")
+	_, _ = ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID, "🔍 Проверка обновлений...")
 
 	current, err := gitCurrentCommit(repoDir)
 	if err != nil {
 		log.Printf("update: current commit: %v", err)
 		_, e := ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID,
-			fmt.Sprintf("🌸 Akari · update\n━━━━━━━━━━━━━━━━━━━━\n\n❌ Не удалось получить текущий коммит: %v", err))
+			fmt.Sprintf("❌ Не удалось получить текущий коммит: %v", err))
 		return e
 	}
 
@@ -85,7 +86,7 @@ func cmdUpdate(ctx *telegram.Context) error {
 	if err != nil {
 		log.Printf("update: remote commit: %v", err)
 		_, e := ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID,
-			fmt.Sprintf("🌸 Akari · update\n━━━━━━━━━━━━━━━━━━━━\n\n❌ Не удалось получить коммит с GitHub: %v", err))
+			fmt.Sprintf("❌ Не удалось получить коммит с GitHub: %v", err))
 		return e
 	}
 
@@ -104,7 +105,7 @@ func cmdUpdate(ctx *telegram.Context) error {
 
 	if current == latest {
 		_, err := ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID,
-			fmt.Sprintf("🌸 Akari · update\n━━━━━━━━━━━━━━━━━━━━\n\n✅ Обновлений нет.\n\nТекущий коммит: %s", shortHash(current)))
+			fmt.Sprintf("✅ Обновлений нет.\n\nТекущий коммит: %s", shortHash(current)))
 		return err
 	}
 
@@ -131,22 +132,22 @@ func performUpdate(ctx *telegram.Context, chatID int64, msgID int32, repoDir, cu
 	if err := gitPull(repoDir); err != nil {
 		log.Printf("update: pull: %v", err)
 		_, e := ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID,
-			fmt.Sprintf("🌸 Akari · update\n━━━━━━━━━━━━━━━━━━━━\n\n❌ git pull:\n%s", trimOutput(err.Error(), 800)))
+			fmt.Sprintf("❌ git pull:\n%s", trimOutput(err.Error(), 800)))
 		return e
 	}
 
-	_, _ = ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID,
-		"🌸 Akari · update\n━━━━━━━━━━━━━━━━━━━━\n\n⚙️ go build...")
+	_, _ = ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID, "⚙️ go build...")
 
 	if err := goBuild(repoDir); err != nil {
 		log.Printf("update: build: %v", err)
 		_, e := ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID,
-			fmt.Sprintf("🌸 Akari · update\n━━━━━━━━━━━━━━━━━━━━\n\n❌ go build:\n%s", trimOutput(err.Error(), 800)))
+			fmt.Sprintf("❌ go build:\n%s", trimOutput(err.Error(), 800)))
 		return e
 	}
 
-	_, _ = ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID,
-		"🌸 Akari · update\n━━━━━━━━━━━━━━━━━━━━\n\n✅ Готово, перезапуск...")
+	saveRestartState(ctx, chatID, msgID)
+
+	_, _ = ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID, "✅ Готово, перезапуск...")
 
 	time.Sleep(1 * time.Second)
 
@@ -163,6 +164,33 @@ func performUpdate(ctx *telegram.Context, chatID int64, msgID int32, repoDir, cu
 	}
 
 	return nil
+}
+
+func saveRestartState(ctx *telegram.Context, chatID int64, msgID int32) {
+	state := restartState{ChatID: chatID, MsgID: msgID}
+
+	if ctx.Update != nil {
+		if chatID > 0 {
+			if u, ok := ctx.Update.Users[chatID]; ok && u.AccessHash != 0 {
+				state.PeerType = "user"
+				state.AccessHash = u.AccessHash
+			}
+		} else if ch, ok := ctx.Update.Chats[chatID]; ok {
+			if channel, ok := ch.Raw.(*tg.Channel); ok {
+				state.PeerType = "channel"
+				state.AccessHash = channel.AccessHash
+				state.ChannelID = channel.ID
+			} else if _, ok := ch.Raw.(*tg.Chat); ok {
+				state.PeerType = "chat"
+			}
+		}
+	}
+
+	if data, err := json.Marshal(state); err == nil {
+		if err := os.WriteFile(restartStateFile, data, 0o600); err != nil {
+			log.Printf("update: save restart state: %v", err)
+		}
+	}
 }
 
 func buildUpdateNotification(current, latest string, commits []string) string {
