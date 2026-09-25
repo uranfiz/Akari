@@ -1,7 +1,6 @@
 package builtin
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
@@ -16,10 +15,6 @@ import (
 
 	"github.com/mtgo-labs/mtgo/telegram"
 )
-
-const updateCheckFreq = 5 * time.Minute
-
-var updateLastNotified string
 
 func init() {
 	core.Register(&core.Module{
@@ -71,6 +66,9 @@ func cmdUpdate(ctx *telegram.Context) error {
 		return err
 	}
 
+	_, _ = ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID,
+		"🌸 Akari · проверка обновлений...")
+
 	current, err := gitCurrentCommit(repoDir)
 	if err != nil {
 		log.Printf("update: current commit: %v", err)
@@ -104,8 +102,6 @@ func cmdUpdate(ctx *telegram.Context) error {
 		return err
 	}
 
-	_, _ = ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID, "🌸 Akari · проверка обновлений...")
-
 	if current == latest {
 		_, err := ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID,
 			fmt.Sprintf("🌸 Akari · update\n━━━━━━━━━━━━━━━━━━━━\n\n✅ Обновлений нет.\n\nТекущий коммит: %s", shortHash(current)))
@@ -114,35 +110,22 @@ func cmdUpdate(ctx *telegram.Context) error {
 
 	commits, _ := gitCommitsBetween(repoDir, current, latest)
 
-	var sb strings.Builder
-	sb.WriteString("🌸 Akari · update\n")
-	sb.WriteString("━━━━━━━━━━━━━━━━━━━━\n\n")
-	sb.WriteString("📦 Доступно обновление\n\n")
-	sb.WriteString(fmt.Sprintf("  текущий: %s\n", shortHash(current)))
-	sb.WriteString(fmt.Sprintf("  новый:   %s\n", shortHash(latest)))
-	sb.WriteString(fmt.Sprintf("  коммитов: %d\n", len(commits)))
-
-	if len(commits) > 0 {
-		sb.WriteString("\n💬 Изменения:\n")
-		max := len(commits)
-		if max > 10 {
-			max = 10
-		}
-		for i := 0; i < max; i++ {
-			sb.WriteString(fmt.Sprintf("  • %s\n", commits[i]))
-		}
-		if len(commits) > 10 {
-			sb.WriteString(fmt.Sprintf("  ... и ещё %d\n", len(commits)-10))
-		}
-	}
-
 	if !force {
-		sb.WriteString("\n💡 Напиши .update -f, чтобы установить.")
-		_, err := ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID, sb.String())
+		_, err := ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID,
+			buildUpdateNotification(current, latest, commits))
 		return err
 	}
 
-	sb.WriteString("\n⬇️ git pull...")
+	return performUpdate(ctx, chatID, msgID, repoDir, current, latest, commits)
+}
+
+func performUpdate(ctx *telegram.Context, chatID int64, msgID int32, repoDir, current, latest string, commits []string) error {
+	var sb strings.Builder
+	sb.WriteString("🚨 УСТАНОВКА ОБНОВЛЕНИЯ\n")
+	sb.WriteString("━━━━━━━━━━━━━━━━━━━━\n\n")
+	sb.WriteString(fmt.Sprintf("  %s → %s\n", shortHash(current), shortHash(latest)))
+	sb.WriteString(fmt.Sprintf("  коммитов: %d\n\n", len(commits)))
+	sb.WriteString("⬇️ git pull...")
 	_, _ = ctx.Client.EditMessageText(ctx.Ctx, chatID, msgID, sb.String())
 
 	if err := gitPull(repoDir); err != nil {
@@ -180,6 +163,36 @@ func cmdUpdate(ctx *telegram.Context) error {
 	}
 
 	return nil
+}
+
+func buildUpdateNotification(current, latest string, commits []string) string {
+	var sb strings.Builder
+
+	sb.WriteString("🚨 ОБНОВЛЕНИЕ AKARI\n")
+	sb.WriteString("━━━━━━━━━━━━━━━━━━━━\n\n")
+	sb.WriteString("⬆️ Доступна новая версия!\n\n")
+	sb.WriteString(fmt.Sprintf("📍 Было:  %s\n", shortHash(current)))
+	sb.WriteString(fmt.Sprintf("📍 Стало: %s\n", shortHash(latest)))
+	sb.WriteString(fmt.Sprintf("📦 Коммитов: %d\n", len(commits)))
+
+	if len(commits) > 0 {
+		sb.WriteString("\n💬 Что нового:\n")
+		max := len(commits)
+		if max > 10 {
+			max = 10
+		}
+		for i := 0; i < max; i++ {
+			sb.WriteString(fmt.Sprintf("  • %s\n", commits[i]))
+		}
+		if len(commits) > 10 {
+			sb.WriteString(fmt.Sprintf("  ... и ещё %d\n", len(commits)-10))
+		}
+	}
+
+	sb.WriteString("\n━━━━━━━━━━━━━━━━━━━━\n")
+	sb.WriteString("👉 .update -f — установить")
+
+	return sb.String()
 }
 
 func repoPath() string {
@@ -277,75 +290,4 @@ func trimOutput(s string, max int) string {
 		return s[:max] + "..."
 	}
 	return s
-}
-
-func PollUpdates(client *telegram.Client) {
-	if core.Cfg.OwnerID == 0 {
-		return
-	}
-
-	repoDir := repoPath()
-	if !isGitRepo(repoDir) {
-		log.Printf("update poller: %s не git-репо, отключён", repoDir)
-		return
-	}
-
-	log.Printf("update poller: started, repo=%s", repoDir)
-
-	ticker := time.NewTicker(updateCheckFreq)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		_ = gitFetch(repoDir)
-
-		current, err := gitCurrentCommit(repoDir)
-		if err != nil {
-			continue
-		}
-
-		latest, err := gitRemoteCommit(repoDir)
-		if err != nil {
-			continue
-		}
-
-		if current == latest {
-			continue
-		}
-
-		if updateLastNotified == latest {
-			continue
-		}
-
-		updateLastNotified = latest
-
-		commits, _ := gitCommitsBetween(repoDir, current, latest)
-
-		var sb strings.Builder
-		sb.WriteString("🌸 Akari · обновление\n")
-		sb.WriteString("━━━━━━━━━━━━━━━━━━━━\n\n")
-		sb.WriteString("📦 Доступно обновление\n\n")
-		sb.WriteString(fmt.Sprintf("  %s → %s\n", shortHash(current), shortHash(latest)))
-		sb.WriteString(fmt.Sprintf("  коммитов: %d\n", len(commits)))
-
-		if len(commits) > 0 {
-			sb.WriteString("\n💬 Изменения:\n")
-			max := len(commits)
-			if max > 10 {
-				max = 10
-			}
-			for i := 0; i < max; i++ {
-				sb.WriteString(fmt.Sprintf("  • %s\n", commits[i]))
-			}
-			if len(commits) > 10 {
-				sb.WriteString(fmt.Sprintf("  ... и ещё %d\n", len(commits)-10))
-			}
-		}
-
-		sb.WriteString("\n💡 Напиши .update -f, чтобы установить.")
-
-		_, err = client.SendMessage(context.Background(), core.Cfg.OwnerID, sb.String())
-		if err != nil {
-			log.Printf("update poller: send: %v", err)
-		}
-	}
 }
