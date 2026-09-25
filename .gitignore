@@ -1,0 +1,15 @@
+akari
+akari.exe
+
+config.yaml
+*.db
+*.db-shm
+*.db-wal
+restart.json
+
+*.log
+
+userland/*.go
+
+*.tmp
+.DS_Store
