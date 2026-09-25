@@ -172,7 +172,7 @@ func NotifyRestartDone(client *telegram.Client) {
 		context.Background(),
 		state.ChatID,
 		state.MsgID,
-		"🌸 Akari успешно перезапущена",
+		"🌸 Akari успешно обновлена и перезапущена",
 	)
 	if err != nil {
 		log.Printf("restart: notify edit error: %v", err)
