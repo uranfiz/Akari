@@ -110,14 +110,14 @@ phone (+...):
 Введи свои данные:
 
 - **api_id** и **api_hash** — получи на [my.telegram.org/apps](https://my.telegram.org/apps)
-- **phone** — номер телефона в формате `+79261234567`
+- **phone** — номер телефона в формате `+79871234567`
 
 После этого:
 
 ```
 connecting...
-login: sending code to +79261234567...
-Enter the code sent to +79261234567: 
+login: sending code to +79871234567...
+Enter the code sent to +79871234567: 
 login: 2FA required
 Enter 2FA password (hint: ...): 
 login: 2FA authenticated
