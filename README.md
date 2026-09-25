@@ -615,6 +615,8 @@ GNU Affero General Public License v3.0 (AGPL-3.0). Смотри [LICENSE](LICENS
 
 Если ты внёс вклад в Akari — я добавлю тебя сюда.
 
+---
+
 ## 🔗 Полезные ссылки
 
 - [mtgo](https://github.com/mtgo-labs/mtgo) — библиотека MTProto
