@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -29,8 +30,10 @@ func main() {
 	}
 
 	if cfg == nil {
-		fmt.Println("=== Akari first run ===")
+		runBanner()
+		fmt.Println()
 		fmt.Println("Get api_id and api_hash at https://my.telegram.org/apps")
+		fmt.Println()
 		cfg = core.DefaultConfig()
 		cfg.APIID = int32(promptInt("api_id: "))
 		cfg.APIHash = prompt("api_hash: ")
@@ -120,4 +123,33 @@ func promptInt(label string) int {
 		}
 		fmt.Println("invalid number")
 	}
+}
+
+func runBanner() {
+	const scriptPath = "scripts/banner.sh"
+
+	info, err := os.Stat(scriptPath)
+	if err != nil {
+		return
+	}
+
+	if err := os.Chmod(scriptPath, info.Mode()|0111); err != nil {
+		log.Printf("chmod banner script: %v", err)
+		return
+	}
+
+	info, err = os.Stat(scriptPath)
+	if err != nil {
+		return
+	}
+
+	if info.Mode().Perm()&0111 == 0 {
+		log.Printf("banner script is not executable: %s", scriptPath)
+		return
+	}
+
+	cmd := exec.Command("./" + scriptPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	_ = cmd.Run()
 }
