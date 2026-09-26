@@ -36,6 +36,11 @@ type Config struct {
 
 	LogLevel string `yaml:"log_level"`
 
+	// Device fingerprint fields (persisted for session stability)
+	DeviceModel   string `yaml:"device_model"`
+	SystemVersion string `yaml:"system_version"`
+	AppVersion    string `yaml:"app_version"`
+
 	path string `yaml:"-"`
 }
 

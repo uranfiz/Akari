@@ -57,11 +57,14 @@ func main() {
 	}
 	defer ext.Close()
 
+	deviceCfg := core.GetOrCreateDeviceProfile(cfg)
+
 	client, err := telegram.NewClient(cfg.APIID, cfg.APIHash, &telegram.Config{
 		PhoneNumber: cfg.OwnerPhone,
 		SessionName: cfg.SessionName,
 		SavePeers:   true,
 		Storage:     storage.NewAdapter(ext),
+		Device:      deviceCfg,
 	})
 	if err != nil {
 		log.Fatalf("create client: %v", err)
