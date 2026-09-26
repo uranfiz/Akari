@@ -68,40 +68,27 @@
 
 ## 🚀 Установка
 
-### 1. Клонируй репозиторий
+### VPS/VDS
 
-```bash
-git clone https://github.com/uranfiz/Akari.git
-cd Akari
-```
+<details>
+  <summary><b>Ubuntu / Debian</b></summary>
 
-### 2. Установи зависимости
-
-```bash
-go mod download
-```
-
-### 3. Собери бинарник
-
-```bash
-go build -o akari ./cmd/akari
-```
-
-Готово. Теперь `akari` — исполняемый файл.
-
----
-
-## 🎬 Первый запуск
-
-```bash
-./akari
-```
+  ```bash
+  sudo apt update && sudo apt install -y git golang-go && \
+  git clone https://github.com/uranfiz/Akari && \
+  cd Akari && \
+  go mod download && \
+  go build -o akari ./cmd/akari && \
+  ./akari
+  ```
+</details>
 
 При первом запуске Akari спросит:
 
 ```
-=== Akari first run ===
+Akari is running!
 Get api_id and api_hash at https://my.telegram.org/apps
+
 api_id: 
 api_hash: 
 phone (+...): 
